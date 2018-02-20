@@ -143,19 +143,34 @@ def invoke_lambda(region, function_name, request_parameters, num_requests, num_t
     # pool.close()
     # pool.join()
 
+    import errno
+
     for i in range(num_requests):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setblocking(False)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         wrappedSocket = ssl.wrap_socket(s, ssl_version=ssl.PROTOCOL_SSLv23)
         wrappedSocket.connect_ex((host , 443))
+
+        ecode = wrappedSocket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        # print ("ecode is " + str(ecode))
+        # while ecode == 61:
+        #     print("ecode is 61, sleeping...")
+        #     time.sleep(0.01)
+        #     ecode = wrappedSocket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        # print errno.errorcode[ecode]
         #print(ready_to_read)
         #print(ready_to_write)
         #print(in_error)
         #print(wrappedSocket.gettimeout())
         connections.append(wrappedSocket)
 
-    ready_to_read, ready_to_write, in_error = select.select([], connections, [])
+    ready_to_write = []
+    chunks = [connections[x:x+100] for x in xrange(0, len(connections), 100)]
+    for chunk in chunks:
+        while len(ready_to_write) != len(chunk):
+            ready_to_read, ready_to_write, in_error = select.select([], chunk, [])
+            time.sleep(0.01)
 
     t2 = time.time()
 
