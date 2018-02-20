@@ -5,6 +5,7 @@ import time
 from multiprocessing.pool import ThreadPool
 import sys, os, base64, datetime, hashlib, hmac 
 import requests # pip install requests
+import select
 
 
 def create_request_string(region, function_name, request_parameters):
@@ -129,26 +130,45 @@ def invoke_lambda(region, function_name, request_parameters, num_requests, num_t
     connections = []
 
     host = 'lambda.us-west-2.amazonaws.com'.replace('us-west-2', region)
-    def establish_connection(key):
+    # def establish_connection(key):
+    #     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #     s.setblocking(False)
+    #     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    #     wrappedSocket = ssl.wrap_socket(s, ssl_version=ssl.PROTOCOL_SSLv23)
+    #     wrappedSocket.connect((host , 443))
+    #     #print(wrappedSocket.gettimeout())
+    #     connections.append(wrappedSocket)
+    # pool = ThreadPool(num_threads)
+    # pool.map(establish_connection, [None] * num_requests)
+    # pool.close()
+    # pool.join()
+
+    for i in range(num_requests):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setblocking(False)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         wrappedSocket = ssl.wrap_socket(s, ssl_version=ssl.PROTOCOL_SSLv23)
-        wrappedSocket.connect((host , 443))
+        wrappedSocket.connect_ex((host , 443))
+        #print(ready_to_read)
+        #print(ready_to_write)
+        #print(in_error)
         #print(wrappedSocket.gettimeout())
         connections.append(wrappedSocket)
-    pool = ThreadPool(num_threads)
-    pool.map(establish_connection, [None] * num_requests)
-    pool.close()
-    pool.join()
+
+    ready_to_read, ready_to_write, in_error = select.select([], connections, [])
 
     t2 = time.time()
 
     for c in connections:
+        # c.setblocking(True)
         c.sendall(request_str)
 
     t3 = time.time()
 
+    # ready_to_read, ready_to_write, in_error = select.select(connections, [], [])
+
     for c in connections:
+        c.setblocking(True)
         data = c.recv(4096)
 
     t4 = time.time()
