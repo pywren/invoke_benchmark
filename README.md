@@ -18,3 +18,10 @@ connection: 4.61677002907
 sent: 0.133472919464
 recv: 10.0993602276
 ```
+```
+python invoker_socket_clean.py 10000 20
+num connections: 10000 threads: 20
+connection: 8.43912696838
+sent: 0.146968126297
+recv: 11.8716299534
+```
