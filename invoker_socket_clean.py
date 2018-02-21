@@ -6,6 +6,7 @@ from multiprocessing.pool import ThreadPool
 import sys, os, base64, datetime, hashlib, hmac 
 import requests # pip install requests
 import select
+from socket import error as socket_error
 
 
 def create_request_string(region, function_name, request_parameters):
@@ -150,9 +151,29 @@ def invoke_lambda(region, function_name, request_parameters, num_requests, num_t
         s.setblocking(False)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         wrappedSocket = ssl.wrap_socket(s, ssl_version=ssl.PROTOCOL_SSLv23)
-        wrappedSocket.connect_ex((host , 443))
+        connections.append(wrappedSocket)
 
-        ecode = wrappedSocket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+
+    while True:
+        done = True
+        for connection in connections:
+            try:
+                connection.connect((host , 443))
+            except socket_error as serr:
+                print "socket err "
+                print serr
+                if serr.errno == errno.EISCONN:
+                    done = True
+                else:
+                    done = False
+        if not done:
+            time.sleep(0.1)
+        else:
+            # all done
+            break
+
+
+        # ecode = wrappedSocket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
         # print ("ecode is " + str(ecode))
         # while ecode == 61:
         #     print("ecode is 61, sleeping...")
@@ -163,14 +184,13 @@ def invoke_lambda(region, function_name, request_parameters, num_requests, num_t
         #print(ready_to_write)
         #print(in_error)
         #print(wrappedSocket.gettimeout())
-        connections.append(wrappedSocket)
 
-    ready_to_write = []
-    chunks = [connections[x:x+100] for x in xrange(0, len(connections), 100)]
-    for chunk in chunks:
-        while len(ready_to_write) != len(chunk):
-            ready_to_read, ready_to_write, in_error = select.select([], chunk, [])
-            time.sleep(0.01)
+    # ready_to_write = []
+    # chunks = [connections[x:x+100] for x in xrange(0, len(connections), 100)]
+    # for chunk in chunks:
+    #     while len(ready_to_write) != len(chunk):
+    #         ready_to_read, ready_to_write, in_error = select.select([], chunk, [])
+    #         time.sleep(0.01)
 
     t2 = time.time()
 
