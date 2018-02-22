@@ -153,21 +153,26 @@ def invoke_lambda(region, function_name, request_parameters, num_requests, num_t
         wrappedSocket = ssl.wrap_socket(s, ssl_version=ssl.PROTOCOL_SSLv23)
         connections.append(wrappedSocket)
 
-
+    next_waiting_connections = connections[:]
     while True:
         done = True
-        for connection in connections:
+        waiting_connections = next_waiting_connections[:]
+        next_waiting_connections = []
+        for connection in waiting_connections:
             try:
                 connection.connect((host , 443))
             except socket_error as serr:
-                print "socket err "
-                print serr
-                if serr.errno == errno.EISCONN:
-                    done = True
-                else:
+                #print "socket err "
+                #print serr
+                if serr.errno != errno.EISCONN:
+                    next_waiting_connections.append(connection)
                     done = False
+            except ValueError:
+                #print "value error"
+                pass
+
         if not done:
-            time.sleep(0.1)
+            time.sleep(0.01)
         else:
             # all done
             break
@@ -194,9 +199,19 @@ def invoke_lambda(region, function_name, request_parameters, num_requests, num_t
 
     t2 = time.time()
 
-    for c in connections:
-        # c.setblocking(True)
+    def send_request(c):
+        c.setblocking(True)
         c.sendall(request_str)
+
+    pool = ThreadPool(num_threads)
+    pool.map(send_request, connections)
+    pool.close()
+    pool.join()
+
+ 
+    #for c in connections:
+    #    # c.setblocking(True)
+    #    c.sendall(request_str)
 
     t3 = time.time()
 
