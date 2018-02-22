@@ -154,14 +154,21 @@ def invoke_lambda(region, function_name, request_parameters, num_requests, num_t
         connections.append(wrappedSocket)
 
     next_waiting_connections = connections[:]
-    while True:
+    while len(next_waiting_connections)>0:
         done = True
         waiting_connections = next_waiting_connections[:]
+	print("round with " + str(len(waiting_connections)))
         next_waiting_connections = []
-        for connection in waiting_connections:
+	ts = time.time()
+        #for connection in waiting_connections:
+	def make_connection(connection):
+            ecode = connection.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            print ("before ecode is " + str(ecode))
             try:
                 connection.connect((host , 443))
             except socket_error as serr:
+        	#ecode = wrappedSocket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        	#print ("ecode is " + str(ecode))
                 #print "socket err "
                 #print serr
                 if serr.errno != errno.EISCONN:
@@ -170,8 +177,15 @@ def invoke_lambda(region, function_name, request_parameters, num_requests, num_t
             except ValueError:
                 #print "value error"
                 pass
-
-        if not done:
+            ecode = connection.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            print ("after ecode is " + str(ecode))
+ 	pool = ThreadPool(num_threads)
+	pool.map(make_connection, waiting_connections)
+	pool.close()
+	pool.join()
+	te = time.time()
+	print("(" + str(te-ts) + ")")
+        if len(next_waiting_connections)>0:
             time.sleep(0.01)
         else:
             # all done
@@ -200,9 +214,11 @@ def invoke_lambda(region, function_name, request_parameters, num_requests, num_t
     t2 = time.time()
 
     def send_request(c):
-        c.setblocking(True)
+        #c.setblocking(False)
         c.sendall(request_str)
 
+    #for c in connections:
+    #	send_request(c)
     pool = ThreadPool(num_threads)
     pool.map(send_request, connections)
     pool.close()
